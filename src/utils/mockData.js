@@ -1,0 +1,67 @@
+export const initialJobs = [
+  {
+    id: '1',
+    title: 'Modern Landing Page for Startup',
+    budget: 1200,
+    skills: ['React', 'Tailwind CSS', 'Framer Motion'],
+    location: 'Remote',
+    category: 'Development',
+    postedBy: 'client_1',
+    description: 'We need a highly dynamic landing page with smooth animations and responsive design.',
+    createdAt: new Date().toISOString(),
+    applicants: [],
+  },
+  {
+    id: '2',
+    title: 'Brand Identity Design',
+    budget: 800,
+    skills: ['Illustrator', 'Branding', 'Logos'],
+    location: 'London, UK',
+    category: 'Design',
+    postedBy: 'client_2',
+    description: 'Looking for a clean, professional brand identity including logo and style guide.',
+    createdAt: new Date().toISOString(),
+    applicants: [],
+  },
+  {
+    id: '3',
+    title: 'SEO Audit and Strategy',
+    budget: 500,
+    skills: ['SEO', 'Google Analytics', 'Marketing'],
+    location: 'Remote',
+    category: 'Marketing',
+    postedBy: 'client_1',
+    description: 'Require a comprehensive SEO audit for our e-commerce site.',
+    createdAt: new Date().toISOString(),
+    applicants: [],
+  },
+];
+
+export const initialFreelancers = [
+  {
+    id: 'free_1',
+    name: 'Alex Rivers',
+    role: 'Full Stack Developer',
+    rating: 4.9,
+    reviews: 124,
+    rate: 65,
+    skills: ['React', 'Node.js', 'PostgreSQL'],
+    avatar: 'https://i.pravatar.cc/150?u=free_1',
+    experience: '5+ years of experience in building SaaS products.',
+  },
+  {
+    id: 'free_2',
+    name: 'Sarah Chen',
+    role: 'UI/UX Designer',
+    rating: 5.0,
+    reviews: 89,
+    rate: 80,
+    skills: ['Figma', 'Adobe XD', 'Prototyping'],
+    avatar: 'https://i.pravatar.cc/150?u=free_2',
+    experience: 'Ex-Google designer specializing in consumer mobile apps.',
+  },
+];
+export const initialUsers = [
+  ...initialFreelancers.map(f => ({ ...f, role: 'freelancer' })),
+  { id: 'client_1', name: 'Startup Co.', email: 'client@test.com', role: 'client', avatar: 'https://i.pravatar.cc/150?u=client_1' },
+];
