@@ -4,7 +4,9 @@ import { useApp } from '../context/AppContext';
 import { Search, User } from 'lucide-react';
 import { storage } from '../utils/storage';
 
-const SOCKET_URL = 'http://localhost:5000';
+import { API_URL } from '../config';
+
+const SOCKET_URL = API_URL;
 
 export const ConversationList = () => {
   const { user, messages } = useApp();

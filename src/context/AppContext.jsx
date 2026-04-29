@@ -3,21 +3,25 @@ import { io } from 'socket.io-client';
 import toast, { Toaster } from 'react-hot-toast';
 import { storage } from '../utils/storage';
 import { initialJobs, initialUsers } from '../utils/mockData';
+import { supabase } from '../utils/supabase';
 
-const SOCKET_URL = 'http://localhost:5000';
+import { API_URL } from '../config';
+
+const SOCKET_URL = API_URL;
 
 const AppContext = createContext();
 
 export const AppProvider = ({ children }) => {
   const [user, setUser] = useState(storage.get('user', null));
-  const [jobs, setJobs] = useState(storage.get('jobs', initialJobs));
-  const [applications, setApplications] = useState(storage.get('applications', []));
-  const [messages, setMessages] = useState(storage.get('messages', []));
-  const [notifications, setNotifications] = useState(storage.get('notifications', []));
+  const [jobs, setJobs] = useState([]);
+  const [applications, setApplications] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const [resume, setResume] = useState(storage.get('resume', null));
   const [theme, setTheme] = useState(storage.get('theme', 'light'));
   const [socket, setSocket] = useState(null);
 
+  // Sync theme
   useEffect(() => {
     document.documentElement.className = theme;
     storage.set('theme', theme);
@@ -25,19 +29,85 @@ export const AppProvider = ({ children }) => {
 
   const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
 
+  // Supabase Data Fetching
+  const fetchJobs = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('jobs')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (!error && data && data.length > 0) {
+        setJobs(data);
+      } else {
+        setJobs(initialJobs);
+      }
+    } catch (err) {
+      setJobs(initialJobs);
+    }
+  };
+
+  const fetchApplications = async () => {
+    if (!user) return;
+    try {
+      // In a real app, we'd join with jobs, but for now let's just fetch applications
+      const { data, error } = await supabase
+        .from('applications')
+        .select('*');
+      
+      if (!error && data) {
+        // Filter based on user role (simulated for now)
+        setApplications(data);
+      }
+    } catch (err) {
+      console.error('Fetch applications error:', err);
+    }
+  };
+
+  const fetchProfile = async () => {
+    if (!user?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      
+      if (!error && data) {
+        const updatedUser = { ...user, ...data };
+        setUser(updatedUser);
+        storage.set('user', updatedUser);
+        
+        if (data.resume_url) {
+          const loadedResume = { url: data.resume_url, name: 'My Resume', date: data.updated_at || new Date().toISOString() };
+          setResume(loadedResume);
+          storage.set('resume', loadedResume);
+        }
+      }
+    } catch (err) {
+      console.error('Fetch profile error:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchJobs();
+    if (user) {
+      fetchProfile();
+      fetchApplications();
+    }
+  }, []); // Run once on mount
+
+  // Sync state to storage
+  useEffect(() => {
+    if (user) storage.set('user', user);
+  }, [user]);
+
+  // Socket.IO and Supabase Real-time
   useEffect(() => {
     if (user) {
       const newSocket = io(SOCKET_URL);
       setSocket(newSocket);
       newSocket.emit('join', user.id);
-
-      // Fetch user resume if exists
-      fetch(`${SOCKET_URL}/api/user/${user.id}/resume`)
-        .then(res => res.json())
-        .then(data => {
-            if (data.resume) setResume({ url: data.resume, name: 'My Resume', date: new Date().toISOString() });
-        })
-        .catch(err => console.log('Resume fetch error:', err));
 
       newSocket.on('receive_message', (msg) => {
         setMessages((prev) => [...prev, msg]);
@@ -53,118 +123,138 @@ export const AppProvider = ({ children }) => {
     }
   }, [user]);
 
-  useEffect(() => {
-    // Seed users list for lookups if empty
-    if (storage.get('users', []).length === 0) {
-      storage.set('users', initialUsers);
+  const updateProfile = async (profileData) => {
+    if (!user) return;
+    
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({ 
+          id: user.id, 
+          ...profileData, 
+          updated_at: new Date().toISOString() 
+        });
+
+      if (!error) {
+        const updatedUser = { ...user, ...profileData };
+        setUser(updatedUser);
+        storage.set('user', updatedUser);
+        toast.success('Profile updated successfully!');
+      } else {
+        // Fallback to localStorage if Supabase fails (for user requirement)
+        const updatedUser = { ...user, ...profileData };
+        setUser(updatedUser);
+        storage.set('user', updatedUser);
+        toast.success('Profile updated (locally)');
+      }
+    } catch (err) {
+      const updatedUser = { ...user, ...profileData };
+      setUser(updatedUser);
+      storage.set('user', updatedUser);
+      toast.success('Profile updated (locally)');
     }
-  }, []);
-
-  useEffect(() => {
-    storage.set('user', user);
-  }, [user]);
-
-  useEffect(() => {
-    storage.set('jobs', jobs);
-  }, [jobs]);
-
-  useEffect(() => {
-    storage.set('applications', applications);
-  }, [applications]);
-
-  useEffect(() => {
-    storage.set('messages', messages);
-  }, [messages]);
-
-  useEffect(() => {
-    storage.set('notifications', notifications);
-  }, [notifications]);
-
-  useEffect(() => {
-    storage.set('resume', resume);
-  }, [resume]);
-
-  const updateProfile = (profileData) => {
-    setUser(prev => ({ ...prev, ...profileData }));
-    
-    // Also update in users list if we were tracking all users
-    const users = storage.get('users', []);
-    const updatedUsers = users.map(u => u.id === user.id ? { ...u, ...profileData } : u);
-    storage.set('users', updatedUsers);
-    
-    alert('Profile updated successfully!');
   };
 
   const login = (userData) => {
     setUser(userData);
-    // Ensure user is in our "users" list for chat lookups etc
-    const users = storage.get('users', []);
-    if (!users.find(u => u.id === userData.id)) {
-      storage.set('users', [...users, userData]);
-    }
+    storage.set('user', userData);
+    fetchProfile();
+    fetchApplications();
   };
 
   const logout = () => {
     setUser(null);
+    storage.remove('user');
+    storage.remove('resume');
+    setApplications([]);
+    setMessages([]);
   };
 
-  const addJob = (job) => {
-    const newJob = { 
-      ...job, 
-      id: 'job_' + Date.now().toString(), 
-      createdAt: new Date().toISOString(), 
-      applicants: [] 
-    };
-    setJobs([newJob, ...jobs]);
-    alert('Job posted successfully!');
-    return newJob;
+  const addJob = async (job) => {
+    try {
+      const { data, error } = await supabase
+        .from('jobs')
+        .insert([{ 
+          ...job, 
+          posted_by: user.id,
+          created_at: new Date().toISOString() 
+        }])
+        .select();
+
+      if (!error && data) {
+        setJobs([data[0], ...jobs]);
+        toast.success('Job posted successfully!');
+        return data[0];
+      } else {
+        // Fallback
+        const newJob = { ...job, id: 'job_' + Date.now(), createdAt: new Date().toISOString() };
+        setJobs([newJob, ...jobs]);
+        toast.success('Job posted (locally)');
+        return newJob;
+      }
+    } catch (err) {
+      const newJob = { ...job, id: 'job_' + Date.now(), createdAt: new Date().toISOString() };
+      setJobs([newJob, ...jobs]);
+      toast.success('Job posted (locally)');
+      return newJob;
+    }
   };
 
-  const applyToJob = (application) => {
-    // Check if already applied
-    if (applications.find(a => a.jobId === application.jobId && a.freelancerId === application.freelancerId)) {
-      alert('You have already applied for this job!');
-      return false;
-    }
+  const applyToJob = async (application) => {
+    try {
+      const { data, error } = await supabase
+        .from('applications')
+        .insert([{ 
+          ...application, 
+          freelancer_id: user.id,
+          status: 'pending', 
+          created_at: new Date().toISOString() 
+        }])
+        .select();
 
-    const newApp = { 
-      ...application, 
-      id: 'app_' + Date.now().toString(), 
-      status: 'pending', 
-      createdAt: new Date().toISOString() 
-    };
-    setApplications([...applications, newApp]);
-    
-    // Notify client
-    const job = jobs.find(j => j.id === application.jobId);
-    if (job) {
-      addNotification({
-        userId: job.postedBy,
-        title: 'New Applicant',
-        message: `${user.name} applied for "${job.title}"`,
-        type: 'application',
-      });
+      if (!error && data) {
+        setApplications([...applications, data[0]]);
+        toast.success('Application submitted successfully!');
+        return true;
+      } else {
+        // Fallback
+        const newApp = { ...application, id: 'app_' + Date.now(), status: 'pending', createdAt: new Date().toISOString() };
+        setApplications([...applications, newApp]);
+        toast.success('Application submitted (locally)');
+        return true;
+      }
+    } catch (err) {
+        const newApp = { ...application, id: 'app_' + Date.now(), status: 'pending', createdAt: new Date().toISOString() };
+        setApplications([...applications, newApp]);
+        toast.success('Application submitted (locally)');
+        return true;
     }
-    alert('Application submitted successfully!');
-    return true;
   };
 
-  const updateApplicationStatus = (appId, status) => {
-    setApplications(applications.map(app => 
-      app.id === appId ? { ...app, status } : app
-    ));
+  const updateApplicationStatus = async (appId, status) => {
+    try {
+      const { error } = await supabase
+        .from('applications')
+        .update({ status })
+        .eq('id', appId);
 
-    // Notify freelancer
-    const app = applications.find(a => a.id === appId);
-    if (app) {
-      addNotification({
-        userId: app.freelancerId,
-        title: 'Application Update',
-        message: `Your application for "${jobs.find(j => j.id === app.jobId)?.title}" was ${status}`,
-        type: 'application',
-      });
+      if (!error) {
+        setApplications(applications.map(app => 
+          app.id === appId ? { ...app, status } : app
+        ));
+        toast.success(`Application ${status}!`);
+      } else {
+        setApplications(applications.map(app => 
+          app.id === appId ? { ...app, status } : app
+        ));
+        toast.success(`Application ${status} (locally)!`);
+      }
+    } catch (err) {
+        setApplications(applications.map(app => 
+          app.id === appId ? { ...app, status } : app
+        ));
+        toast.success(`Application ${status} (locally)!`);
     }
-    alert(`Application ${status}!`);
   };
 
   const sendMessage = (msg) => {
@@ -175,7 +265,7 @@ export const AppProvider = ({ children }) => {
     setMessages([...messages, newMsg]);
   };
 
-  const addNotification = (notif) => {
+  const addNotification = async (notif) => {
     const newNotif = { ...notif, id: 'notif_' + Date.now().toString(), read: false, createdAt: new Date().toISOString() };
     setNotifications([newNotif, ...notifications]);
     if (socket) {
@@ -191,6 +281,19 @@ export const AppProvider = ({ children }) => {
 
   const uploadResume = async (file) => {
     if (!user) return;
+    
+    // Client-side validation
+    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Only PDF, DOC, and DOCX files are allowed!');
+      return false;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('File too large. Max limit is 2MB.');
+      return false;
+    }
+
     const formData = new FormData();
     formData.append('resume', file);
     formData.append('userId', user.id);
@@ -201,14 +304,25 @@ export const AppProvider = ({ children }) => {
         body: formData,
       });
       const data = await response.json();
-      if (data.success) {
-        setResume({ url: data.resumePath, name: file.name, date: new Date().toISOString() });
+      
+      if (response.ok && data.success) {
+        const newResume = { url: data.resumePath, name: file.name, date: new Date().toISOString() };
+        setResume(newResume);
+        storage.set('resume', newResume);
+        
+        // Update user object as well
+        const updatedUser = { ...user, resume_url: data.resumePath };
+        setUser(updatedUser);
+        storage.set('user', updatedUser);
+        
         toast.success('Resume uploaded successfully!');
         return true;
+      } else {
+        toast.error(data.error || 'Failed to upload resume');
       }
     } catch (err) {
       console.error('Upload error:', err);
-      toast.error('Failed to upload resume');
+      toast.error('Server error during upload');
     }
     return false;
   };

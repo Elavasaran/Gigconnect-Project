@@ -30,7 +30,7 @@ export const Login = () => {
       // In a real app, this would be an API call
       // For demo, we check if user exists in localStorage or just create a dummy session
       const mockUser = {
-        id: 'user_' + Date.now(),
+        id: crypto.randomUUID(),
         name: email.split('@')[0],
         email: email,
         role: email.includes('client') ? 'client' : 'freelancer', // Simple way to test roles

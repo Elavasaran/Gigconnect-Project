@@ -23,7 +23,7 @@ export const Signup = () => {
     
     setTimeout(() => {
       const newUser = {
-        id: 'user_' + Date.now(),
+        id: crypto.randomUUID(),
         name,
         email,
         role,

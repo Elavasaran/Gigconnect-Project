@@ -1,30 +1,63 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { JobCard } from '../components/JobCard';
-import { Briefcase, CreditCard, Clock, Star, TrendingUp, CheckCircle } from 'lucide-react';
+import { Briefcase, CreditCard, Clock, Star, TrendingUp, CheckCircle, Plus, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+import { API_URL } from '../config';
 
 export const FreelancerDashboard = () => {
   const { user, jobs, applications, updateProfile, resume, setResume, uploadResume } = useApp();
   const [isEditing, setIsEditing] = useState(false);
-  const SOCKET_URL = 'http://localhost:5000';
+  const SOCKET_URL = API_URL;
+  
+  // Controlled Form State
   const [editForm, setEditForm] = useState({
-    name: user?.name || '',
-    rate: user?.rate || '45',
-    skills: user?.skills?.join(', ') || '',
-    experience: user?.experience || ''
+    name: '',
+    rate: '',
+    skills: [],
+    experience: ''
   });
+  
+  const [skillInput, setSkillInput] = useState('');
 
-  const handleSaveProfile = (e) => {
+  // Load user data into form when editing starts
+  useEffect(() => {
+    if (user) {
+      setEditForm({
+        name: user.name || '',
+        rate: user.rate || '45',
+        skills: user.skills || [],
+        experience: user.experience || ''
+      });
+    }
+  }, [user, isEditing]);
+
+  const handleAddSkill = (e) => {
     e.preventDefault();
-    updateProfile({
+    if (skillInput.trim() && !editForm.skills.includes(skillInput.trim())) {
+      setEditForm({
+        ...editForm,
+        skills: [...editForm.skills, skillInput.trim()]
+      });
+      setSkillInput('');
+    }
+  };
+
+  const handleRemoveSkill = (skillToRemove) => {
+    setEditForm({
       ...editForm,
-      skills: editForm.skills.split(',').map(s => s.trim())
+      skills: editForm.skills.filter(s => s !== skillToRemove)
     });
+  };
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    await updateProfile(editForm);
     setIsEditing(false);
   };
 
@@ -69,7 +102,7 @@ export const FreelancerDashboard = () => {
 
       <AnimatePresence>
         {isEditing && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mb-12 overflow-hidden">
+            <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="mb-12">
                 <Card className="p-8 border-brand-200 bg-brand-50/10">
                     <form onSubmit={handleSaveProfile} className="space-y-6">
                         <h2 className="text-xl font-bold mb-6">Edit Professional Profile</h2>
@@ -77,7 +110,34 @@ export const FreelancerDashboard = () => {
                             <Input label="Name" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} required />
                             <Input label="Hourly Rate ($)" type="number" value={editForm.rate} onChange={e => setEditForm({...editForm, rate: e.target.value})} required />
                         </div>
-                        <Input label="Skills (comma separated)" value={editForm.skills} onChange={e => setEditForm({...editForm, skills: e.target.value})} required />
+                        
+                        {/* Skills Add Section */}
+                        <div className="space-y-3">
+                            <label className="block text-sm font-medium text-gray-700">Skills & Expertise</label>
+                            <div className="flex gap-2">
+                                <Input 
+                                  placeholder="Add a skill (e.g. React)" 
+                                  value={skillInput} 
+                                  onChange={e => setSkillInput(e.target.value)} 
+                                  onKeyPress={e => e.key === 'Enter' && handleAddSkill(e)}
+                                />
+                                <Button type="button" onClick={handleAddSkill} variant="secondary" className="px-4">
+                                    <Plus size={20} />
+                                </Button>
+                            </div>
+                            <div className="flex flex-wrap gap-2 mt-3">
+                                {editForm.skills.map(skill => (
+                                    <Badge key={skill} variant="primary" className="pl-3 pr-2 py-1 flex items-center gap-1 normal-case">
+                                        {skill}
+                                        <button type="button" onClick={() => handleRemoveSkill(skill)} className="hover:bg-brand-100 rounded-full p-0.5">
+                                            <X size={14} />
+                                        </button>
+                                    </Badge>
+                                ))}
+                                {editForm.skills.length === 0 && <p className="text-sm text-gray-400 italic">No skills added yet</p>}
+                            </div>
+                        </div>
+
                         <div>
                              <label className="block text-sm font-medium text-gray-700 mb-1.5">Brief Experience / Bio</label>
                              <textarea rows="3" className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl outline-none focus:border-brand-500" value={editForm.experience} onChange={e => setEditForm({...editForm, experience: e.target.value})} required />
@@ -173,8 +233,8 @@ export const FreelancerDashboard = () => {
                     myApplications.map(app => {
                        const job = jobs.find(j => j.id === app.jobId);
                        return (
-                          <div key={app.id} className="flex flex-col p-3 rounded-xl bg-gray-50 border border-gray-100">
-                             <h4 className="font-bold text-sm text-gray-900 mb-1">{job?.title}</h4>
+                          <div key={app.id} className="flex flex-col p-4 rounded-xl bg-gray-50 border border-gray-100 transition-all hover:border-brand-200">
+                             <h4 className="font-bold text-sm text-gray-900 mb-2 truncate">{job?.title}</h4>
                              <div className="flex justify-between items-center">
                                 <Badge variant={app.status === 'accepted' ? 'success' : app.status === 'rejected' ? 'error' : 'warning'}>
                                    {app.status}

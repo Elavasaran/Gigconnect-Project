@@ -13,30 +13,37 @@ export const ClientDashboard = () => {
   const navigate = useNavigate();
   const [showPostJob, setShowPostJob] = useState(false);
   
-  // Job Form State
-  const [title, setTitle] = useState('');
-  const [budget, setBudget] = useState('');
-  const [category, setCategory] = useState('Development');
-  const [desc, setDesc] = useState('');
-  const [skills, setSkills] = useState('');
+  // Job Form State (Controlled)
+  const [jobForm, setJobForm] = useState({
+    title: '',
+    budget: '',
+    category: 'Development',
+    description: '',
+    skills: ''
+  });
 
-  const myJobs = jobs.filter(j => j.postedBy === user?.id || j.postedBy === 'client_1'); // Demo hack
-  const totalSpend = myJobs.reduce((acc, curr) => acc + curr.budget, 0);
+  const myJobs = jobs.filter(j => j.posted_by === user?.id || j.postedBy === user?.id);
+  const totalSpend = myJobs.reduce((acc, curr) => acc + (parseInt(curr.budget) || 0), 0);
 
-  const handlePostJob = (e) => {
+  const handlePostJob = async (e) => {
     e.preventDefault();
-    addJob({
-      title,
-      budget: parseInt(budget),
-      category,
-      description: desc,
-      skills: skills.split(',').map(s => s.trim()),
-      postedBy: user.id,
+    const success = await addJob({
+      ...jobForm,
+      budget: parseInt(jobForm.budget),
+      skills: jobForm.skills.split(',').map(s => s.trim()),
       location: 'Remote',
     });
-    setShowPostJob(false);
-    setTitle(''); setBudget(''); setDesc(''); setSkills('');
+    
+    if (success) {
+        setShowPostJob(false);
+        setJobForm({ title: '', budget: '', category: 'Development', description: '', skills: '' });
+    }
   };
+
+  const pendingApplications = applications.filter(a => {
+      const job = jobs.find(j => j.id === a.jobId);
+      return (job?.posted_by === user?.id || job?.postedBy === user?.id) && a.status === 'pending';
+  });
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-12">
@@ -54,9 +61,9 @@ export const ClientDashboard = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
          {[
             { label: 'Total Jobs', val: myJobs.length, icon: Briefcase, color: 'text-brand-600 bg-brand-50' },
-            { label: 'Active Hires', val: '2', icon: Users, color: 'text-blue-600 bg-blue-50' },
+            { label: 'Active Hires', val: applications.filter(a => a.status === 'accepted').length, icon: Users, color: 'text-blue-600 bg-blue-50' },
             { label: 'Total Budgeted', val: `$${totalSpend}`, icon: DollarSign, color: 'text-emerald-600 bg-emerald-50' },
-            { label: 'Interviews', val: '5', icon: Calendar, color: 'text-purple-600 bg-purple-50' },
+            { label: 'Interviews', val: pendingApplications.length, icon: Calendar, color: 'text-purple-600 bg-purple-50' },
          ].map((s, i) => (
             <Card key={i} className="p-6">
                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${s.color}`}>
@@ -80,44 +87,48 @@ export const ClientDashboard = () => {
           </div>
 
           <div className="space-y-4">
-            {myJobs.map(job => (
-              <Card key={job.id} hover={false} className="p-6">
-                 <div className="flex justify-between items-start mb-4">
-                    <div>
-                        <h4 className="text-lg font-bold text-gray-900">{job.title}</h4>
-                        <div className="flex items-center gap-4 mt-1">
-                            <span className="text-xs text-brand-600 font-semibold uppercase">{job.category}</span>
-                            <span className="text-xs text-gray-400">• Posted {new Date(job.createdAt).toLocaleDateString()}</span>
+            {myJobs.length === 0 ? (
+                <Card className="p-12 text-center text-gray-400 italic">You haven't posted any jobs yet.</Card>
+            ) : (
+                myJobs.map(job => (
+                <Card key={job.id} hover={false} className="p-6">
+                    <div className="flex justify-between items-start mb-4">
+                        <div>
+                            <h4 className="text-lg font-bold text-gray-900">{job.title}</h4>
+                            <div className="flex items-center gap-4 mt-1">
+                                <span className="text-xs text-brand-600 font-semibold uppercase">{job.category}</span>
+                                <span className="text-xs text-gray-400">• Posted {new Date(job.createdAt).toLocaleDateString()}</span>
+                            </div>
+                        </div>
+                        <Badge variant="success">Active</Badge>
+                    </div>
+                    
+                    <div className="grid grid-cols-3 gap-4 py-4 border-y border-gray-50 mb-6">
+                        <div className="text-center border-r border-gray-50">
+                            <p className="text-xs text-gray-400 font-medium">Budget</p>
+                            <p className="font-bold text-gray-900">${job.budget}</p>
+                        </div>
+                        <div className="text-center border-r border-gray-50">
+                            <p className="text-xs text-gray-400 font-medium">Applicants</p>
+                            <p className="font-bold text-gray-900">{applications.filter(a => a.jobId === job.id).length}</p>
+                        </div>
+                        <div className="text-center">
+                            <p className="text-xs text-gray-400 font-medium">Status</p>
+                            <p className="font-bold text-emerald-600">Open</p>
                         </div>
                     </div>
-                    <Badge variant="success">Active</Badge>
-                 </div>
-                 
-                 <div className="grid grid-cols-3 gap-4 py-4 border-y border-gray-50 mb-6">
-                    <div className="text-center border-r border-gray-50">
-                        <p className="text-xs text-gray-400 font-medium">Budget</p>
-                        <p className="font-bold text-gray-900">${job.budget}</p>
-                    </div>
-                    <div className="text-center border-r border-gray-50">
-                        <p className="text-xs text-gray-400 font-medium">Applicants</p>
-                        <p className="font-bold text-gray-900">{applications.filter(a => a.jobId === job.id).length}</p>
-                    </div>
-                    <div className="text-center">
-                        <p className="text-xs text-gray-400 font-medium">Views</p>
-                        <p className="font-bold text-gray-900">{Math.floor(Math.random()*100)}</p>
-                    </div>
-                 </div>
 
-                 <div className="flex justify-end gap-3">
-                    <Button variant="outline" size="sm" className="flex items-center gap-2">
-                        <Settings size={14} /> Edit
-                    </Button>
-                    <Button variant="secondary" size="sm" className="flex items-center gap-2 text-brand-600 border-brand-100 hover:bg-brand-50">
-                        View Applicants <ChevronRight size={14} />
-                    </Button>
-                 </div>
-              </Card>
-            ))}
+                    <div className="flex justify-end gap-3">
+                        <Button variant="outline" size="sm" className="flex items-center gap-2">
+                            <Settings size={14} /> Edit
+                        </Button>
+                        <Button variant="secondary" size="sm" className="flex items-center gap-2 text-brand-600 border-brand-100 hover:bg-brand-50">
+                            View Applicants <ChevronRight size={14} />
+                        </Button>
+                    </div>
+                </Card>
+                ))
+            )}
           </div>
         </div>
 
@@ -125,18 +136,18 @@ export const ClientDashboard = () => {
         <div className="space-y-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Pending Applications</h2>
             <div className="space-y-4">
-                {applications.filter(a => a.status === 'pending').length === 0 ? (
+                {pendingApplications.length === 0 ? (
                     <Card className="p-12 text-center text-gray-400 italic">No pending applications</Card>
                 ) : (
-                    applications.filter(a => a.status === 'pending').map(app => {
+                    pendingApplications.map(app => {
                         const job = jobs.find(j => j.id === app.jobId);
                         return (
                             <Card key={app.id} className="p-4 border-l-4 border-l-amber-400">
                                 <div className="flex items-center gap-3 mb-3">
                                     <img src={`https://ui-avatars.com/api/?name=${app.freelancerName || 'Freelancer'}`} className="w-10 h-10 rounded-full" alt="" />
                                     <div>
-                                        <p className="font-bold text-gray-900 text-sm leading-none">{app.freelancerName || 'John Doe'}</p>
-                                        <p className="text-xs text-gray-400 mt-1">Applying for: <span className="text-brand-600">{job?.title}</span></p>
+                                        <p className="font-bold text-gray-900 text-sm leading-none">{app.freelancerName || 'Freelancer'}</p>
+                                        <p className="text-xs text-gray-400 mt-1">Applying for: <span className="text-brand-600 truncate inline-block max-w-[150px] align-bottom">{job?.title}</span></p>
                                     </div>
                                 </div>
                                 <div className="flex gap-2 mt-4">
@@ -154,17 +165,17 @@ export const ClientDashboard = () => {
                                     >
                                         <MessageSquare size={16} />
                                     </Button>
-                                    {resume && (
-                                      <a 
-                                        href={resume.url} 
-                                        target="_blank" 
-                                        rel="noreferrer"
-                                        className="text-[10px] text-brand-600 font-bold block mt-2 hover:underline"
-                                      >
-                                        View Resume
-                                      </a>
-                                    )}
                                 </div>
+                                {app.resume_url && (
+                                    <a 
+                                      href={app.resume_url} 
+                                      target="_blank" 
+                                      rel="noreferrer"
+                                      className="text-[10px] text-brand-600 font-bold block mt-3 hover:underline"
+                                    >
+                                      VIEW RESUME
+                                    </a>
+                                )}
                             </Card>
                         )
                     })
@@ -185,12 +196,12 @@ export const ClientDashboard = () => {
                 </div>
                 <form onSubmit={handlePostJob} className="p-8 space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <Input label="Job Title" placeholder="e.g. Modern Web Design..." value={title} onChange={e => setTitle(e.target.value)} required />
-                        <Input label="Budget ($)" type="number" placeholder="500" value={budget} onChange={e => setBudget(e.target.value)} required />
+                        <Input label="Job Title" placeholder="e.g. Modern Web Design..." value={jobForm.title} onChange={e => setJobForm({...jobForm, title: e.target.value})} required />
+                        <Input label="Budget ($)" type="number" placeholder="500" value={jobForm.budget} onChange={e => setJobForm({...jobForm, budget: e.target.value})} required />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1.5">Category</label>
-                        <select className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:border-brand-500" value={category} onChange={e => setCategory(e.target.value)}>
+                        <select className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:border-brand-500" value={jobForm.category} onChange={e => setJobForm({...jobForm, category: e.target.value})}>
                             <option>Development</option>
                             <option>Design</option>
                             <option>Marketing</option>
@@ -199,9 +210,9 @@ export const ClientDashboard = () => {
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1.5">Job Description</label>
-                        <textarea rows="4" className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl outline-none focus:border-brand-500" placeholder="Tell us about your project..." value={desc} onChange={e => setDesc(e.target.value)} required></textarea>
+                        <textarea rows="4" className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl outline-none focus:border-brand-500" placeholder="Tell us about your project..." value={jobForm.description} onChange={e => setJobForm({...jobForm, description: e.target.value})} required></textarea>
                     </div>
-                    <Input label="Skills (comma separated)" placeholder="React, Node, Figma" value={skills} onChange={e => setSkills(e.target.value)} required />
+                    <Input label="Skills (comma separated)" placeholder="React, Node, Figma" value={jobForm.skills} onChange={e => setJobForm({...jobForm, skills: e.target.value})} required />
                     
                     <div className="flex gap-4 pt-4">
                         <Button type="button" variant="secondary" className="flex-1" onClick={() => setShowPostJob(false)}>Cancel</Button>

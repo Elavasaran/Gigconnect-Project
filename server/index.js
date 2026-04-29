@@ -1,7 +1,7 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const mongoose = require('mongoose');
+const { createClient } = require('@supabase/supabase-js');
 const cors = require('cors');
 require('dotenv').config();
 
@@ -9,89 +9,81 @@ const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
 
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: FRONTEND_URL,
     methods: ["GET", "POST"]
   }
 });
 
-app.use(cors());
+app.use(cors()); // Allow all origins for demo/dev
 app.use(express.json());
 // Serve static uploads
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Ensure upload directories exist
-const uploadDir = 'uploads/resumes';
+const uploadDir = path.join(__dirname, 'uploads/resumes');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// MongoDB Connection
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/gigconnect';
-mongoose.connect(MONGO_URI)
-  .then(() => console.log('✅ MongoDB Connected'))
-  .catch(err => console.error('❌ MongoDB Connection Error:', err));
-
 // --- Multer Configuration ---
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/resumes');
+    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     cb(null, uniqueSuffix + '-' + file.originalname);
   }
 });
-const upload = multer({ storage: storage });
 
-// --- Schemas ---
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = ['.pdf', '.doc', '.docx'];
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (allowedTypes.includes(ext)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only .pdf, .doc and .docx files are allowed!'), false);
+  }
+};
 
-const UserSchema = new mongoose.Schema({
-  userId: { type: String, unique: true },
-  resume: String, // Path to resume file
-  updatedAt: { type: Date, default: Date.now }
+const upload = multer({ 
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: { fileSize: 2 * 1024 * 1024 } // 2MB Limit
 });
-const User = mongoose.model('User', UserSchema);
 
-const MessageSchema = new mongoose.Schema({
-  senderId: String,
-  receiverId: String,
-  text: String,
-  timestamp: { type: Date, default: Date.now },
-  read: { type: Boolean, default: false }
-});
-const Message = mongoose.model('Message', MessageSchema);
-
-const NotificationSchema = new mongoose.Schema({
-  userId: String,
-  type: String, // 'message', 'application', 'status'
-  message: String,
-  isRead: { type: Boolean, default: false },
-  createdAt: { type: Date, default: Date.now }
-});
-const Notification = mongoose.model('Notification', NotificationSchema);
-
-// --- APIs ---
+// --- APIs (Refactored for Supabase) ---
 
 // 1. Get conversations
 app.get('/api/messages/conversations', async (req, res) => {
   const { userId } = req.query;
   try {
-    const messages = await Message.find({
-      $or: [{ senderId: userId }, { receiverId: userId }]
-    }).sort({ timestamp: -1 });
+    const { data: messages, error } = await supabase
+      .from('messages')
+      .select('*')
+      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
 
     const partners = new Map();
     messages.forEach(msg => {
-      const partnerId = msg.senderId === userId ? msg.receiverId : msg.senderId;
+      const partnerId = msg.sender_id === userId ? msg.receiver_id : msg.sender_id;
       if (!partners.has(partnerId)) {
         partners.set(partnerId, {
           userId: partnerId,
           lastMessage: msg.text,
-          timestamp: msg.timestamp,
+          timestamp: msg.created_at,
         });
       }
     });
@@ -107,25 +99,30 @@ app.get('/api/messages/:userId', async (req, res) => {
   const { myId } = req.query;
   const { userId } = req.params;
   try {
-    const chat = await Message.find({
-      $or: [
-        { senderId: myId, receiverId: userId },
-        { senderId: userId, receiverId: myId }
-      ]
-    }).sort({ timestamp: 1 });
+    const { data: chat, error } = await supabase
+      .from('messages')
+      .select('*')
+      .or(`and(sender_id.eq.${myId},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${myId})`)
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
     res.json(chat);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// 3. Send message
+// 3. Send message (POST API as backup to Socket)
 app.post('/api/messages', async (req, res) => {
   const { senderId, receiverId, text } = req.body;
   try {
-    const newMsg = new Message({ senderId, receiverId, text });
-    await newMsg.save();
-    res.json(newMsg);
+    const { data, error } = await supabase
+      .from('messages')
+      .insert([{ sender_id: senderId, receiver_id: receiverId, text }])
+      .select();
+
+    if (error) throw error;
+    res.json(data[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -135,7 +132,13 @@ app.post('/api/messages', async (req, res) => {
 app.get('/api/notifications', async (req, res) => {
   const { userId } = req.query;
   try {
-    const notifs = await Notification.find({ userId }).sort({ createdAt: -1 });
+    const { data: notifs, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
     res.json(notifs);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -145,7 +148,12 @@ app.get('/api/notifications', async (req, res) => {
 app.put('/api/notifications/read', async (req, res) => {
   const { userId } = req.body;
   try {
-    await Notification.updateMany({ userId }, { isRead: true });
+    const { error } = await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('user_id', userId);
+
+    if (error) throw error;
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -153,34 +161,48 @@ app.put('/api/notifications/read', async (req, res) => {
 });
 
 // 5. Resume Management
-app.post('/api/resume/upload', upload.single('resume'), async (req, res) => {
-  const { userId } = req.body;
-  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-
-  try {
-    const resumePath = `/uploads/resumes/${req.file.filename}`;
-    let user = await User.findOne({ userId });
-    
-    if (user) {
-      user.resume = resumePath;
-      user.updatedAt = Date.now();
-      await user.save();
-    } else {
-      user = new User({ userId, resume: resumePath });
-      await user.save();
+app.post('/api/resume/upload', (req, res) => {
+  upload.single('resume')(req, res, async (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: 'File too large. Max limit is 2MB.' });
+      }
+      return res.status(400).json({ error: err.message });
+    } else if (err) {
+      return res.status(400).json({ error: err.message });
     }
-    
-    res.json({ success: true, resumePath });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+
+    const { userId } = req.body;
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    try {
+      const resumePath = `/uploads/resumes/${req.file.filename}`;
+      
+      // Update Supabase profile
+      const { error } = await supabase
+        .from('profiles')
+        .update({ resume_url: resumePath, updated_at: new Date().toISOString() })
+        .eq('id', userId);
+
+      if (error) throw error;
+      
+      res.json({ success: true, resumePath });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 });
 
 app.get('/api/user/:userId/resume', async (req, res) => {
   try {
-    const user = await User.findOne({ userId: req.params.userId });
-    if (!user || !user.resume) return res.status(404).json({ error: 'Resume not found' });
-    res.json({ resume: user.resume });
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('resume_url')
+      .eq('id', req.params.userId)
+      .single();
+
+    if (error || !data?.resume_url) return res.status(404).json({ error: 'Resume not found' });
+    res.json({ resume: data.resume_url });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -201,23 +223,37 @@ io.on('connection', (socket) => {
   socket.on('send_message', async (data) => {
     const { senderId, receiverId, text } = data;
     
-    // Save to DB
-    const newMsg = new Message({ senderId, receiverId, text });
-    await newMsg.save();
+    // Save to Supabase
+    const { data: newMsg, error: msgError } = await supabase
+      .from('messages')
+      .insert([{ sender_id: senderId, receiver_id: receiverId, text }])
+      .select()
+      .single();
+
+    if (msgError) {
+      console.error('Supabase Save Error:', msgError);
+      return;
+    }
 
     // Send to receiver if online
     const receiverSocket = onlineUsers.get(receiverId);
     if (receiverSocket) {
       io.to(receiverSocket).emit('receive_message', newMsg);
       
-      // Also send real-time notification
-      const newNotif = new Notification({
-        userId: receiverId,
-        type: 'message',
-        message: `New message from ${senderId.slice(0, 5)}...`
-      });
-      await newNotif.save();
-      io.to(receiverSocket).emit('notification', newNotif);
+      // Also save notification to Supabase
+      const { data: newNotif, error: notifError } = await supabase
+        .from('notifications')
+        .insert([{
+          user_id: receiverId,
+          type: 'message',
+          message: `New message from ${senderId.slice(0, 5)}...`
+        }])
+        .select()
+        .single();
+
+      if (!notifError) {
+        io.to(receiverSocket).emit('notification', newNotif);
+      }
     }
   });
 
