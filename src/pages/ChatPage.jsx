@@ -69,23 +69,14 @@ export const ChatPage = () => {
           {activeChat ? (
             <>
               {/* Header */}
-              <div className="p-4 px-6 bg-white border-b border-gray-100 flex justify-between items-center">
+              <div className="p-4 px-6 bg-white border-b border-gray-200 flex justify-between items-center">
                 <div className="flex items-center gap-4">
-                  <img src={activeChat.avatar} className="w-10 h-10 rounded-full" alt="" />
-                  <div>
-                    <h3 className="font-bold text-gray-900 leading-none">{activeChat.name}</h3>
-                    <span className="text-xs text-emerald-500 font-medium">{activeChat.status}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                    <button className="p-2 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-all"><Phone size={20} /></button>
-                    <button className="p-2 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-all"><Video size={20} /></button>
-                    <button className="p-2 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-all"><MoreVertical size={20} /></button>
+                  <h3 className="font-bold text-gray-900">Chat with {activeChat.name}</h3>
                 </div>
               </div>
 
               {/* Messages Area */}
-              <div className="flex-grow overflow-y-auto p-6 space-y-4 bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-repeat">
+              <div className="flex-grow overflow-y-auto p-6 space-y-4 bg-white">
                 <div className="flex justify-center">
                     <span className="px-3 py-1 bg-white/80 backdrop-blur rounded-full text-[10px] font-bold text-gray-400 uppercase tracking-widest shadow-sm">Today</span>
                 </div>
@@ -102,12 +93,8 @@ export const ChatPage = () => {
 
                 {filteredMessages.map(msg => (
                   <div key={msg.id} className={`flex ${msg.senderId === user.id ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[70%] p-4 rounded-2xl shadow-sm relative ${msg.senderId === user.id ? 'bg-brand-600 text-white rounded-tr-none' : 'bg-white text-gray-800 rounded-tl-none'}`}>
-                      <p className="text-sm leading-relaxed">{msg.text}</p>
-                      <div className={`flex items-center justify-end gap-1 mt-1 ${msg.senderId === user.id ? 'text-brand-200' : 'text-gray-400'}`}>
-                        <span className="text-[10px]">{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        {msg.senderId === user.id && <CheckCheck size={12} />}
-                      </div>
+                    <div className={`max-w-[70%] px-5 py-2.5 rounded-full ${msg.senderId === user.id ? 'bg-[#2563eb] text-white' : 'bg-gray-100 text-gray-800'}`}>
+                      <p className="text-sm font-medium">{msg.text}</p>
                     </div>
                   </div>
                 ))}
@@ -115,19 +102,17 @@ export const ChatPage = () => {
               </div>
 
               {/* Input Area */}
-              <div className="p-4 bg-white border-t border-gray-100">
-                <form onSubmit={handleSend} className="flex items-center gap-3">
-                  <button type="button" className="p-2 text-gray-400 hover:text-brand-600"><Smile size={24} /></button>
-                  <button type="button" className="p-2 text-gray-400 hover:text-brand-600 border-r pr-4"><Paperclip size={24} /></button>
+              <div className="p-4 bg-white border-t border-gray-200">
+                <form onSubmit={handleSend} className="flex items-center w-full border border-gray-300 rounded-full px-2 py-1.5">
                   <input 
                     type="text"
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Type your message here..."
-                    className="flex-grow py-3 outline-none text-gray-900 placeholder:text-gray-400"
+                    placeholder="Type your message..."
+                    className="flex-grow pl-4 py-2 outline-none text-gray-900 bg-transparent text-sm placeholder:text-gray-500"
                   />
-                  <Button type="submit" className="w-12 h-12 rounded-full p-0 flex items-center justify-center shrink-0">
-                    <Send size={20} className="ml-1" />
+                  <Button type="submit" className="w-10 h-10 rounded-full p-0 flex items-center justify-center shrink-0 bg-[#2563eb] hover:bg-blue-700">
+                    <Send size={18} className="text-white" />
                   </Button>
                 </form>
               </div>

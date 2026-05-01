@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { JobCard } from '../components/JobCard';
-import { Briefcase, CreditCard, Clock, Star, TrendingUp, CheckCircle, Plus, X } from 'lucide-react';
+import { Briefcase, CreditCard, Clock, Star, TrendingUp, CheckCircle, Plus, X, Crown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { API_URL } from '../config';
@@ -90,14 +91,28 @@ export const FreelancerDashboard = () => {
     <div className="max-w-7xl mx-auto px-4 py-12">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
         <div>
-          <h1 className="text-3xl font-extrabold text-gray-900">Welcome back, {user?.name}!</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-extrabold text-gray-900">Welcome back, {user?.name}!</h1>
+            <Badge variant="primary" className="uppercase text-[10px] tracking-wider">
+              {user?.plan || 'Free'} Plan
+            </Badge>
+          </div>
           <p className="text-gray-500 mt-1">Here's what's happening with your freelance business today.</p>
         </div>
-        {!isEditing && (
-            <Button onClick={() => setIsEditing(true)} className="flex items-center gap-2">
-                Edit Profile <CheckCircle size={18} />
-            </Button>
-        )}
+        <div className="flex gap-3">
+            {(user?.plan === 'free' || !user?.plan) && (
+              <Link to="/pricing">
+                <Button variant="secondary" className="flex items-center gap-2 bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200">
+                  <Crown size={18} /> Upgrade Plan
+                </Button>
+              </Link>
+            )}
+            {!isEditing && (
+                <Button onClick={() => setIsEditing(true)} className="flex items-center gap-2">
+                    Edit Profile <CheckCircle size={18} />
+                </Button>
+            )}
+        </div>
       </div>
 
       <AnimatePresence>

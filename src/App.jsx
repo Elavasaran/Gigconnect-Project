@@ -9,6 +9,7 @@ import { Signup } from './pages/Signup';
 import { ClientDashboard } from './pages/ClientDashboard';
 import { FreelancerDashboard } from './pages/FreelancerDashboard';
 import { ChatPage } from './pages/ChatPage';
+import { Pricing } from './pages/Pricing';
 
 const PrivateRoute = ({ children, role }) => {
   const { user } = useApp();
@@ -84,6 +85,7 @@ const App = () => {
               } 
             />
             <Route path="/jobs" element={<Home />} /> {/* Placeholder for now */}
+            <Route path="/pricing" element={<Pricing />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </Layout>

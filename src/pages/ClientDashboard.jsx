@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { Plus, Users, Briefcase, DollarSign, Calendar, ChevronRight, Settings, MessageSquare, Check, X } from 'lucide-react';
+import { Plus, Users, Briefcase, DollarSign, Calendar, ChevronRight, Settings, MessageSquare, Check, X, Crown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export const ClientDashboard = () => {
@@ -49,12 +49,26 @@ export const ClientDashboard = () => {
     <div className="max-w-7xl mx-auto px-4 py-12">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
         <div>
-          <h1 className="text-3xl font-extrabold text-gray-900">Client Dashboard</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-extrabold text-gray-900">Client Dashboard</h1>
+            <Badge variant="primary" className="uppercase text-[10px] tracking-wider">
+              {user?.plan || 'Free'} Plan
+            </Badge>
+          </div>
           <p className="text-gray-500 mt-1">Manage your job posts and hire the best talent.</p>
         </div>
-        <Button onClick={() => setShowPostJob(true)} className="flex items-center gap-2">
-            <Plus size={20} /> Post a New Job
-        </Button>
+        <div className="flex gap-3">
+          {(user?.plan === 'free' || !user?.plan) && (
+            <Link to="/pricing">
+              <Button variant="secondary" className="flex items-center gap-2 bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200">
+                <Crown size={18} /> Upgrade Plan
+              </Button>
+            </Link>
+          )}
+          <Button onClick={() => setShowPostJob(true)} className="flex items-center gap-2">
+              <Plus size={20} /> Post a New Job
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}

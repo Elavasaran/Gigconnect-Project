@@ -35,6 +35,7 @@ export const Navbar = () => {
   const navLinks = [
     { name: 'Browse Gigs', path: '/jobs' },
     { name: 'Freelancers', path: '/freelancers' },
+    { name: 'Pricing', path: '/pricing' },
   ];
 
   const dashboardPath = user?.role === 'client' ? '/client-dashboard' : '/freelancer-dashboard';
@@ -136,7 +137,12 @@ export const Navbar = () => {
                   className="flex items-center gap-2 group px-2 py-1 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   <img src={user.avatar || `https://ui-avatars.com/api/?name=${user.name}`} className="w-8 h-8 rounded-full border-2 border-brand-100" alt="" />
-                  <span className="text-sm font-semibold text-gray-700 md:block hidden">{user.name}</span>
+                  <div className="md:block hidden">
+                    <span className="text-sm font-semibold text-gray-700 block leading-tight">{user.name}</span>
+                    <span className="text-[10px] font-bold text-brand-600 uppercase tracking-wider">
+                      {(user.plan || 'Free')} PLAN
+                    </span>
+                  </div>
                 </Link>
                 <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-red-500 transition-colors">
                   <LogOut size={20} />
